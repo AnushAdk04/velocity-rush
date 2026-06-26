@@ -1,35 +1,35 @@
 'use client'
 
-import { useRef, forwardRef } from 'react'
+import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useCarPhysics } from './useCarPhysics'
 import { useGameStore } from '../../store/useGameStore'
 import { DESERT_HAWK } from '../../types/index'
+import ChaseCamera from '../cameras/ChaseCamera'
 
-// Simple procedural car mesh — no assets needed
 function CarMesh() {
   return (
     <group>
       {/* Car body */}
-      <mesh position={[0, 0.35, 0]} castShadow>
+      <mesh position={[0, 0.35, 0]}>
         <boxGeometry args={[1.8, 0.5, 4]} />
         <meshStandardMaterial color="#e63946" metalness={0.6} roughness={0.3} />
       </mesh>
 
       {/* Cabin */}
-      <mesh position={[0, 0.8, 0.2]} castShadow>
+      <mesh position={[0, 0.8, 0.2]}>
         <boxGeometry args={[1.4, 0.45, 2]} />
         <meshStandardMaterial color="#e63946" metalness={0.6} roughness={0.3} />
       </mesh>
 
-      {/* Windscreen tint */}
+      {/* Windscreen */}
       <mesh position={[0, 0.82, -0.7]}>
         <boxGeometry args={[1.35, 0.38, 0.05]} />
         <meshStandardMaterial color="#90e0ef" transparent opacity={0.5} />
       </mesh>
 
-      {/* Wheels — FL, FR, RL, RR */}
+      {/* Wheels */}
       {[
         [-0.95, 0, -1.3],
         [0.95, 0, -1.3],
@@ -40,7 +40,6 @@ function CarMesh() {
           key={i}
           position={[x, y, z]}
           rotation={[0, 0, Math.PI / 2]}
-          castShadow
         >
           <cylinderGeometry args={[0.35, 0.35, 0.25, 16]} />
           <meshStandardMaterial color="#1a1a2e" roughness={0.9} />
@@ -61,26 +60,26 @@ function CarMesh() {
 export default function PlayerCar() {
   const carRef = useRef<THREE.Group>(null!)
   const setSpeed = useGameStore((s) => s.setSpeed)
-
   const { speed } = useCarPhysics(carRef, {
-    topSpeed: DESERT_HAWK.topSpeed / 3.6,   // convert km/h to m/s
+    topSpeed: DESERT_HAWK.topSpeed / 3.6,
     acceleration: 22,
     braking: 30,
     handling: 2.0,
     grip: 0.88,
   })
 
-  // Push speed to HUD every frame
   useFrame(() => {
     setSpeed(Math.abs(speed.current) * 3.6)
   })
 
   return (
-    <group
-      ref={carRef}
-      position={[0, 0.4, 20]}  // start line position
-    >
-      <CarMesh />
-    </group>
+    <>
+      <group ref={carRef} position={[0, 0.4, 20]}>
+        <CarMesh />
+      </group>
+
+      {/* Camera follows this car */}
+      <ChaseCamera target={carRef} speed={speed} />
+    </>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { Canvas } from '@react-three/fiber'
-import { KeyboardControls, OrbitControls } from '@react-three/drei'
+import { KeyboardControls } from '@react-three/drei'
 import DesertRun from './tracks/DesertRun'
 import PlayerCar from './cars/PlayerCar'
 
@@ -34,9 +34,6 @@ export default function GameScene() {
 
         <DesertRun />
         <PlayerCar />
-
-        {/* Temporary — remove once chase camera is in */}
-        <OrbitControls />
       </Canvas>
     </KeyboardControls>
   )
