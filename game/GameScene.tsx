@@ -4,6 +4,7 @@ import { Canvas } from '@react-three/fiber'
 import { KeyboardControls } from '@react-three/drei'
 import DesertRun from './tracks/DesertRun'
 import PlayerCar from './cars/PlayerCar'
+import AIManager from './ai/AIManager'
 
 export const CONTROLS = [
   { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
@@ -34,6 +35,7 @@ export default function GameScene() {
 
         <DesertRun />
         <PlayerCar />
+        <AIManager />
       </Canvas>
     </KeyboardControls>
   )
