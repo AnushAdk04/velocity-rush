@@ -2,6 +2,7 @@
 
 import { Canvas } from '@react-three/fiber'
 import { KeyboardControls } from '@react-three/drei'
+import * as THREE from 'three'
 import DesertRun from './tracks/DesertRun'
 import PlayerCar from './cars/PlayerCar'
 import AIManager from './ai/AIManager'
@@ -15,7 +16,11 @@ export const CONTROLS = [
   { name: 'camera', keys: ['KeyC'] },
 ]
 
-export default function GameScene() {
+interface GameSceneProps {
+  carRef: React.RefObject<THREE.Group>
+}
+
+export default function GameScene({ carRef }: GameSceneProps) {
   return (
     <KeyboardControls map={CONTROLS}>
       <Canvas
@@ -32,9 +37,8 @@ export default function GameScene() {
         <color attach="background" args={['#87CEEB']} />
         <ambientLight intensity={0.8} />
         <directionalLight position={[50, 80, 50]} intensity={1.2} />
-
         <DesertRun />
-        <PlayerCar />
+        <PlayerCar carRef={carRef} />
         <AIManager />
       </Canvas>
     </KeyboardControls>

@@ -18,27 +18,25 @@ export default function ChaseCamera({ target, speed }: ChaseCameraProps) {
     const car = target.current
     if (!car) return
 
-    const spd = speed?.current ?? 0
-    // Zoom out slightly at high speed
-    const zoomFactor = 1 + (Math.abs(spd) / 40) * 0.4
+    const spd = Math.abs(speed?.current ?? 0)
+    const topSpeed = 55
 
-    // Desired camera offset behind and above the car
-    const offset = new THREE.Vector3(0, 3.5 * zoomFactor, 9 * zoomFactor)
+    // Much tighter zoom range — only 10% back at max speed
+    const zoomFactor = 1 + (spd / topSpeed) * 0.1
 
-    // Transform offset to car's local space
+    const offset = new THREE.Vector3(0, 3.2 * zoomFactor, 8 * zoomFactor)
     const desiredPos = offset
       .applyQuaternion(car.quaternion)
       .add(car.position)
 
-    // Smooth camera position — lower value = more lag (cinematic)
-    currentPos.current.lerp(desiredPos, 0.08)
+    // Faster lerp = camera stays closer to car
+    currentPos.current.lerp(desiredPos, 0.12)
 
-    // Look slightly ahead of the car
-    const lookAtOffset = new THREE.Vector3(0, 0.5, -4)
+    const lookAtOffset = new THREE.Vector3(0, 0.8, -5)
       .applyQuaternion(car.quaternion)
       .add(car.position)
 
-    currentLookAt.current.lerp(lookAtOffset, 0.12)
+    currentLookAt.current.lerp(lookAtOffset, 0.15)
 
     camera.position.copy(currentPos.current)
     camera.lookAt(currentLookAt.current)

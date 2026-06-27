@@ -3,12 +3,30 @@ import { useFrame } from '@react-three/fiber'
 import { useKeyboardControls } from '@react-three/drei'
 import * as THREE from 'three'
 
+// Gear ratios — each gear has a speed range (m/s) and acceleration multiplier
+const GEARS = [
+  { min: 0,  max: 8,  accelMult: 1.0 },   // 1st — 0-29 km/h
+  { min: 8,  max: 16, accelMult: 0.85 },  // 2nd — 29-58 km/h
+  { min: 16, max: 24, accelMult: 0.70 },  // 3rd — 58-86 km/h
+  { min: 24, max: 32, accelMult: 0.55 },  // 4th — 86-115 km/h
+  { min: 32, max: 40, accelMult: 0.40 },  // 5th — 115-144 km/h
+  { min: 40, max: 55, accelMult: 0.28 },  // 6th — 144-200 km/h
+]
+
+function getGear(speed: number): number {
+  const absSpeed = Math.abs(speed)
+  for (let i = 0; i < GEARS.length; i++) {
+    if (absSpeed >= GEARS[i].min && absSpeed < GEARS[i].max) return i
+  }
+  return GEARS.length - 1
+}
+
 interface CarPhysicsOptions {
-  topSpeed?: number        // m/s (~200 km/h = 55)
-  acceleration?: number   // force per frame
+  topSpeed?: number
+  acceleration?: number
   braking?: number
-  handling?: number       // steering speed
-  grip?: number           // 0-1, how much lateral drift
+  handling?: number
+  grip?: number
   gravity?: number
 }
 
@@ -17,17 +35,19 @@ export function useCarPhysics(
   options: CarPhysicsOptions = {}
 ) {
   const {
-    topSpeed = 40,
-    acceleration = 25,
-    braking = 35,
-    handling = 2.2,
+    topSpeed = 55,
+    acceleration = 12,   // slower base acceleration
+    braking = 28,
+    handling = 1.4,      // reduced from 2.0
     grip = 0.88,
     gravity = 20,
   } = options
 
   const velocity = useRef(new THREE.Vector3())
-  const speed = useRef(0)         // forward speed (signed)
-  const yVelocity = useRef(0)     // vertical velocity for gravity
+  const speed = useRef(0)
+  const yVelocity = useRef(0)
+  const currentGear = useRef(0)
+  const gearChangeTimer = useRef(0)  // prevent gear hunting
 
   const [, getKeys] = useKeyboardControls()
 
@@ -35,81 +55,75 @@ export function useCarPhysics(
     const car = carRef.current
     if (!car) return
 
-    // Cap delta to avoid spiral of death on tab switch
     const dt = Math.min(delta, 0.05)
-
     const keys = getKeys()
-    const forward = keys.forward
-    const backward = keys.backward
-    const left = keys.left
-    const right = keys.right
-    const brake = keys.brake
 
-    // --- Engine force ---
-    if (forward) {
+    const absSpeed = Math.abs(speed.current)
+    const gear = getGear(absSpeed)
+
+    // Smooth gear change — debounce by 0.3s
+    gearChangeTimer.current -= dt
+    if (gear !== currentGear.current && gearChangeTimer.current <= 0) {
+      currentGear.current = gear
+      gearChangeTimer.current = 0.3
+    }
+
+    const gearAccelMult = GEARS[currentGear.current].accelMult
+
+    // --- Engine force with gear multiplier ---
+    if (keys.forward) {
+      // Acceleration tapers off in higher gears
       speed.current = Math.min(
-        speed.current + acceleration * dt,
+        speed.current + acceleration * gearAccelMult * dt,
         topSpeed
       )
-    } else if (backward) {
-      speed.current = Math.max(
-        speed.current - braking * dt,
-        -topSpeed * 0.4   // reverse is slower
-      )
+    } else if (keys.backward) {
+      if (speed.current > 0.5) {
+        // Engine braking when moving forward
+        speed.current = Math.max(speed.current - braking * dt, 0)
+      } else {
+        // Reverse
+        speed.current = Math.max(speed.current - (acceleration * 0.5) * dt, -topSpeed * 0.35)
+      }
     } else {
-      // Natural deceleration
-      speed.current *= (1 - 2.5 * dt)
-      if (Math.abs(speed.current) < 0.1) speed.current = 0
+      // Gentle coast deceleration
+      speed.current *= (1 - 1.8 * dt)
+      if (Math.abs(speed.current) < 0.05) speed.current = 0
     }
 
-    // Brake
-    if (brake) {
-      speed.current *= (1 - 8 * dt)
+    if (keys.brake) {
+      speed.current *= (1 - 10 * dt)
     }
 
-    // --- Steering ---
-    // Only steer when moving, scale with speed
-    const speedRatio = Math.min(Math.abs(speed.current) / topSpeed, 1)
-    const steerAmount = handling * speedRatio * dt
+    // --- Steering — scales with speed, less twitchy ---
+    const speedRatio = Math.min(absSpeed / topSpeed, 1)
+    // High speed = less steering angle (like a real car)
+    const steerAmount = handling * (1 - speedRatio * 0.5) * dt
 
-    if ((left || right) && Math.abs(speed.current) > 0.5) {
+    if (Math.abs(speed.current) > 0.5) {
       const dir = speed.current > 0 ? 1 : -1
-      if (left) car.rotation.y += steerAmount * dir
-      if (right) car.rotation.y -= steerAmount * dir
+      if (keys.left) car.rotation.y += steerAmount * dir
+      if (keys.right) car.rotation.y -= steerAmount * dir
     }
 
     // --- Movement ---
-    // Get car's forward direction
     const carForward = new THREE.Vector3(0, 0, -1)
       .applyQuaternion(car.quaternion)
-
-    // Target velocity = forward direction * speed
     const targetVelocity = carForward.multiplyScalar(speed.current)
-
-    // Blend current velocity toward target (grip simulation)
-    // Low grip = more drift (lateral velocity preserved longer)
     velocity.current.lerp(targetVelocity, grip)
 
     // --- Gravity ---
     yVelocity.current -= gravity * dt
-
-    // Ground check — simple flat ground at y=0
-    const groundY = 0
-    const carBottomY = car.position.y - 0.4  // car half-height
-
-    if (carBottomY <= groundY) {
-      car.position.y = groundY + 0.4
+    if (car.position.y - 0.4 <= 0) {
+      car.position.y = 0.4
       yVelocity.current = 0
     }
 
-    // --- Apply movement ---
+    // --- Apply ---
     car.position.x += velocity.current.x * dt
     car.position.z += velocity.current.z * dt
     car.position.y += yVelocity.current * dt
-
-    // Expose speed in km/h for HUD
-    return Math.abs(speed.current) * 3.6
   })
 
-  return { velocity, speed }
+  return { velocity, speed, currentGear }
 }

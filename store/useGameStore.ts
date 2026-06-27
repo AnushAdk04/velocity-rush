@@ -15,6 +15,8 @@ interface GameStore {
   // Vehicle state (read by HUD)
   speed: number           // km/h
   rpm: number
+  currentGear: number
+
 
   // Camera
   cameraMode: 'third' | 'cockpit'
@@ -23,6 +25,7 @@ interface GameStore {
   setPhase: (phase: GamePhase) => void
   setSpeed: (speed: number) => void
   setRpm: (rpm: number) => void
+  setCurrentGear: (gear: number) => void
   incrementLap: () => void
   setPosition: (pos: number) => void
   toggleCamera: () => void
@@ -39,11 +42,13 @@ export const useGameStore = create<GameStore>((set) => ({
   bestLapTime: null,
   speed: 0,
   rpm: 0,
-  cameraMode: 'third',
+  currentGear: 0,
+  cameraMode: 'third' as const,
 
   setPhase: (phase) => set({ phase }),
   setSpeed: (speed) => set({ speed }),
   setRpm: (rpm) => set({ rpm }),
+  setCurrentGear: (currentGear) => set({ currentGear }),
   incrementLap: () => set((s) => ({ currentLap: s.currentLap + 1 })),
   setPosition: (position) => set({ position }),
   toggleCamera: () =>

@@ -2,13 +2,12 @@
 
 import GhostCar from './GhostCar'
 
-// 5 opponents, spread across the track, different speeds + colors
 const AI_CARS = [
-  { startWaypoint: 0,  speed: 16, color: '#4361ee' },  // blue
-  { startWaypoint: 3,  speed: 19, color: '#f77f00' },  // orange
-  { startWaypoint: 6,  speed: 17, color: '#06d6a0' },  // teal
-  { startWaypoint: 9,  speed: 20, color: '#9b5de5' },  // purple
-  { startWaypoint: 12, speed: 15, color: '#ffffff' },  // white
+  { startWaypoint: 0,  speed: 16, color: '#4361ee' },
+  { startWaypoint: 4,  speed: 19, color: '#f77f00' },
+  { startWaypoint: 8,  speed: 17, color: '#06d6a0' },
+  { startWaypoint: 12, speed: 20, color: '#9b5de5' },
+  { startWaypoint: 16, speed: 15, color: '#ffffff' },
 ]
 
 export default function AIManager() {
