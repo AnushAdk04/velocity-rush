@@ -8,6 +8,7 @@ import { useGameStore } from '../../store/useGameStore'
 import { DESERT_HAWK } from '../../types/index'
 import ChaseCamera from '../cameras/ChaseCamera'
 import { useRaceManager } from '../race/useRaceManager'
+import { usePositionTracker } from '../race/usePositionTracker'
 
 function CarMesh() {
   return (
@@ -59,6 +60,7 @@ export default function PlayerCar({ carRef, onAlert }: PlayerCarProps) {
   })
 
   useRaceManager(carRef)
+  usePositionTracker(carRef)
 
   useFrame(() => {
     setSpeed(Math.abs(speed.current) * 3.6)

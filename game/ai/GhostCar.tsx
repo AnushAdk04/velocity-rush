@@ -4,8 +4,10 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { DESERT_RUN_WAYPOINTS } from '../tracks/checkpoints'
+import { registerAIPosition } from '../race/usePositionTracker'
 
 interface GhostCarProps {
+  index: number
   startX?: number
   startZ?: number
   speed?: number
@@ -40,16 +42,16 @@ function GhostCarMesh({ color }: { color: string }) {
 }
 
 export default function GhostCar({
+  index,
   startX = 0,
   startZ = 60,
   speed = 18,
   color = '#4361ee',
 }: GhostCarProps) {
   const groupRef = useRef<THREE.Group>(null!)
-
-  // Find closest waypoint to starting position
   const startPos = new THREE.Vector3(startX, 0.4, startZ)
-  const closestWp = useRef(() => {
+
+  const closestStart = (() => {
     let minDist = Infinity
     let closest = 0
     DESERT_RUN_WAYPOINTS.forEach((wp, i) => {
@@ -57,18 +59,24 @@ export default function GhostCar({
       if (d < minDist) { minDist = d; closest = i }
     })
     return closest
-  })
+  })()
 
-  const waypointIndex = useRef(closestWp.current())
+  const waypointIndex = useRef(closestStart)
   const currentPos = useRef(startPos.clone())
+  const started = useRef(false)
 
   useFrame((_, delta) => {
     const car = groupRef.current
     if (!car) return
     const dt = Math.min(delta, 0.05)
+
+    // Wait for race to start — read from store
+    const { phase } = useGameStore.getState()
+    if (phase !== 'racing') return
+    if (!started.current) started.current = true
+
     const waypoints = DESERT_RUN_WAYPOINTS
     const target = waypoints[waypointIndex.current]
-
     const dir = new THREE.Vector3().subVectors(target, currentPos.current)
     const distance = dir.length()
 
@@ -79,9 +87,11 @@ export default function GhostCar({
 
     dir.normalize()
     currentPos.current.addScaledVector(dir, speed * dt)
-
     car.position.set(currentPos.current.x, 0.4, currentPos.current.z)
     car.rotation.y = Math.atan2(dir.x, dir.z)
+
+    // Register position for race position calculation
+    registerAIPosition(index, currentPos.current)
   })
 
   return (
@@ -90,3 +100,6 @@ export default function GhostCar({
     </group>
   )
 }
+
+// Need to import useGameStore inside component
+import { useGameStore } from '../../store/useGameStore'

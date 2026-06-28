@@ -3,10 +3,11 @@ import { useFrame } from '@react-three/fiber'
 import { useKeyboardControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { DESERT_RUN_WAYPOINTS } from '../tracks/checkpoints'
+import { useGameStore } from '../../store/useGameStore'
 
 const GEARS = [
-  { min: 0,  max: 8,  accelMult: 1.0 },
-  { min: 8,  max: 16, accelMult: 0.85 },
+  { min: 0, max: 8, accelMult: 1.0 },
+  { min: 8, max: 16, accelMult: 0.85 },
   { min: 16, max: 24, accelMult: 0.70 },
   { min: 24, max: 32, accelMult: 0.55 },
   { min: 32, max: 40, accelMult: 0.40 },
@@ -50,7 +51,7 @@ function distToTrack(pos: THREE.Vector3): number {
   let minDist = Infinity
   for (let i = 0; i < pts.length - 1; i++) {
     const a = new THREE.Vector3(pts[i].x, 0, pts[i].z)
-    const b = new THREE.Vector3(pts[i+1].x, 0, pts[i+1].z)
+    const b = new THREE.Vector3(pts[i + 1].x, 0, pts[i + 1].z)
     const ab = new THREE.Vector3().subVectors(b, a)
     const len2 = ab.dot(ab)
     if (len2 === 0) continue
@@ -77,7 +78,7 @@ function clampToRoad(
 
   for (let i = 0; i < pts.length - 1; i++) {
     const a = new THREE.Vector3(pts[i].x, 0, pts[i].z)
-    const b = new THREE.Vector3(pts[i+1].x, 0, pts[i+1].z)
+    const b = new THREE.Vector3(pts[i + 1].x, 0, pts[i + 1].z)
     const ab = new THREE.Vector3().subVectors(b, a)
     const len2 = ab.dot(ab)
     if (len2 === 0) continue
@@ -157,6 +158,12 @@ export function useCarPhysics(
     if (!car) return
     const dt = Math.min(delta, 0.05)
     const keys = getKeys() as Record<string, boolean>
+    const { phase } = useGameStore.getState()
+
+    if (phase === 'countdown' || phase === 'menu') {
+      speed.current *= (1 - 3 * dt)
+      return
+    }
 
     // Warmup — no alerts right after spawn
     if (warmupTimer.current > 0) {

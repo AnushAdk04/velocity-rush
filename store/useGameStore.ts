@@ -3,25 +3,19 @@ import { create } from 'zustand'
 export type GamePhase = 'menu' | 'countdown' | 'racing' | 'finished'
 
 interface GameStore {
-  // Race state
   phase: GamePhase
+  countdownValue: number
   currentLap: number
   totalLaps: number
-  position: number        // player's race position (1st, 2nd...)
+  position: number
   totalRacers: number
-  raceTime: number        // seconds elapsed
+  raceTime: number
   bestLapTime: number | null
-
-  // Vehicle state (read by HUD)
-  speed: number           // km/h
+  speed: number
   rpm: number
   currentGear: number
-
-
-  // Camera
   cameraMode: 'third' | 'cockpit'
 
-  // Actions
   setPhase: (phase: GamePhase) => void
   setSpeed: (speed: number) => void
   setRpm: (rpm: number) => void
@@ -34,6 +28,7 @@ interface GameStore {
 
 export const useGameStore = create<GameStore>((set) => ({
   phase: 'menu',
+  countdownValue: 3,
   currentLap: 1,
   totalLaps: 3,
   position: 1,
@@ -43,7 +38,7 @@ export const useGameStore = create<GameStore>((set) => ({
   speed: 0,
   rpm: 0,
   currentGear: 0,
-  cameraMode: 'third' as const,
+  cameraMode: 'third',
 
   setPhase: (phase) => set({ phase }),
   setSpeed: (speed) => set({ speed }),
@@ -51,7 +46,8 @@ export const useGameStore = create<GameStore>((set) => ({
   setCurrentGear: (currentGear) => set({ currentGear }),
   incrementLap: () => set((s) => ({ currentLap: s.currentLap + 1 })),
   setPosition: (position) => set({ position }),
-  toggleCamera: () =>
-    set((s) => ({ cameraMode: s.cameraMode === 'third' ? 'cockpit' : 'third' })),
+  toggleCamera: () => set((s) => ({
+    cameraMode: s.cameraMode === 'third' ? 'cockpit' : 'third'
+  })),
   tickTime: (delta) => set((s) => ({ raceTime: s.raceTime + delta })),
 }))
