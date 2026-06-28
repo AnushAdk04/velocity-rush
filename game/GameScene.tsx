@@ -7,6 +7,7 @@ import DesertRun from './tracks/DesertRun'
 import PlayerCar from './cars/PlayerCar'
 import AIManager from './ai/AIManager'
 import { CarAlert } from './cars/useCarPhysics'
+import AudioManager from './audio/AudioManager'
 
 export const CONTROLS = [
   { name: 'forward',  keys: ['ArrowUp',    'KeyW'] },
@@ -43,6 +44,7 @@ export default function GameScene({ carRef, onAlert }: GameSceneProps) {
         <DesertRun />
         <PlayerCar carRef={carRef} onAlert={onAlert} />
         <AIManager />
+        <AudioManager />
       </Canvas>
     </KeyboardControls>
   )

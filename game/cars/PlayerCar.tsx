@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useCarPhysics, CarAlert } from './useCarPhysics'
@@ -9,6 +9,7 @@ import { DESERT_HAWK } from '../../types/index'
 import ChaseCamera from '../cameras/ChaseCamera'
 import { useRaceManager } from '../race/useRaceManager'
 import { usePositionTracker } from '../race/usePositionTracker'
+import { useEngineSound } from '../audio/useEngineSound'
 
 function CarMesh() {
   return (
@@ -49,6 +50,8 @@ interface PlayerCarProps {
 export default function PlayerCar({ carRef, onAlert }: PlayerCarProps) {
   const setSpeed = useGameStore((s) => s.setSpeed)
   const setCurrentGear = useGameStore((s) => s.setCurrentGear)
+  const engine = useEngineSound()
+  const engineStarted = useRef(false)
 
   const { speed, currentGear } = useCarPhysics(carRef, {
     topSpeed: DESERT_HAWK.topSpeed / 3.6,
@@ -63,9 +66,27 @@ export default function PlayerCar({ carRef, onAlert }: PlayerCarProps) {
   usePositionTracker(carRef)
 
   useFrame(() => {
-    setSpeed(Math.abs(speed.current) * 3.6)
-    setCurrentGear(currentGear.current + 1)
+    const spd = Math.abs(speed.current) * 3.6
+    const gear = currentGear.current + 1
+    setSpeed(spd)
+    setCurrentGear(gear)
+
+    // Start audio on first movement — browsers require user gesture
+    if (!engineStarted.current && spd > 0.5) {
+      engine.start()
+      engineStarted.current = true
+    }
+    if (engineStarted.current) {
+      engine.update(spd, gear)
+    }
   })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (engineStarted.current) engine.stop()
+    }
+  }, [])
 
   return (
     <>
