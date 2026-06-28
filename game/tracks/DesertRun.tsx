@@ -98,58 +98,57 @@ function CenterLine() {
 function GuardRails() {
   const points = DESERT_RUN_WAYPOINTS
   const dirs = useMemo(() => getDirections(), [])
-
   const rails: JSX.Element[] = []
+  const totalSegs = points.length - 1
 
-  for (let i = 0; i < points.length - 1; i++) {
+  for (let i = 0; i < totalSegs; i++) {
+    // Skip the last 2 segments (near finish line) and first segment
+    // to avoid geometry fighting with the finish gantry
+    if (i <= 2 || i >= totalSegs - 3) continue
+
     const cur = points[i]
     const nxt = points[i + 1]
     const dirCur = dirs[i]
-    const dirNxt = dirs[i + 1]
     const rightCur = new THREE.Vector3(-dirCur.z, 0, dirCur.x)
-    const rightNxt = new THREE.Vector3(-dirNxt.z, 0, dirNxt.x)
-
-    const half = ROAD_WIDTH / 2 + 0.3
-    const useRail = i % 6 < 3  // alternate rail / kerb sections
-
-    // Left and right edge positions
-    const edgesCur = [
-      cur.clone().add(rightCur.clone().multiplyScalar(-half)),
-      cur.clone().add(rightCur.clone().multiplyScalar(half)),
-    ]
-    const edgesNxt = [
-      nxt.clone().add(rightNxt.clone().multiplyScalar(-half)),
-      nxt.clone().add(rightNxt.clone().multiplyScalar(half)),
-    ]
 
     const segDir = new THREE.Vector3().subVectors(nxt, cur)
     const segLen = segDir.length()
+    if (segLen < 1) continue  // skip degenerate segments
+
     const segAngle = Math.atan2(segDir.x, segDir.z)
     const segMid = cur.clone().lerp(nxt, 0.5)
+    const half = ROAD_WIDTH / 2 + 0.3
+    const useRail = i % 6 < 3
+
+    const leftMid = segMid.clone().add(rightCur.clone().multiplyScalar(-half))
+    const rightMid = segMid.clone().add(rightCur.clone().multiplyScalar(half))
 
     if (useRail) {
-      // Guard rail beam — both sides
-      ;[0, 1].forEach((side) => {
-        const midEdge = edgesCur[side].clone().lerp(edgesNxt[side], 0.5)
+      ;[leftMid, rightMid].forEach((edgeMid, side) => {
+        // Beam — 96% of segment length to avoid overlap at corners
         rails.push(
           <mesh
             key={`beam-${i}-${side}`}
-            position={[midEdge.x, 0.55, midEdge.z]}
+            position={[edgeMid.x, 0.55, edgeMid.z]}
             rotation={[0, segAngle, 0]}
           >
-            <boxGeometry args={[0.18, 0.45, segLen + 0.2]} />
+            <boxGeometry args={[0.18, 0.4, segLen * 0.96]} />
             <meshStandardMaterial color="#cccccc" metalness={0.8} roughness={0.2} />
           </mesh>
         )
         // Posts
-        const numPosts = Math.max(Math.ceil(segLen / 7), 1)
+        const numPosts = Math.max(Math.ceil(segLen / 8), 1)
         for (let p = 0; p <= numPosts; p++) {
           const t = p / numPosts
-          const postBase = edgesCur[side].clone().lerp(edgesNxt[side], t)
+          const nextDir = dirs[Math.min(i + 1, dirs.length - 1)]
+          const nextRight = new THREE.Vector3(-nextDir.z, 0, nextDir.x)
+          const curEdge = cur.clone().add(rightCur.clone().multiplyScalar(side === 0 ? -half : half))
+          const nxtEdge = nxt.clone().add(nextRight.clone().multiplyScalar(side === 0 ? -half : half))
+          const postPos = curEdge.clone().lerp(nxtEdge, t)
           rails.push(
             <mesh
               key={`post-${i}-${side}-${p}`}
-              position={[postBase.x, 0.35, postBase.z]}
+              position={[postPos.x, 0.35, postPos.z]}
             >
               <boxGeometry args={[0.1, 0.7, 0.1]} />
               <meshStandardMaterial color="#888888" />
@@ -158,25 +157,25 @@ function GuardRails() {
         }
       })
     } else {
-      // Red/white kerb strips — both sides
       ;[0, 1].forEach((side) => {
+        const edgeMid = side === 0 ? leftMid : rightMid
+        const curKerbEdge = cur.clone().add(
+          rightCur.clone().multiplyScalar(side === 0 ? -(half - 1) : (half - 1))
+        )
+        const nxtKerbEdge = nxt.clone().add(
+          rightCur.clone().multiplyScalar(side === 0 ? -(half - 1) : (half - 1))
+        )
         const numKerbs = Math.max(Math.ceil(segLen / 2.5), 1)
         for (let k = 0; k < numKerbs; k++) {
           const t = (k + 0.5) / numKerbs
-          const kPos = edgesCur[side].clone().lerp(edgesNxt[side], t)
-          // Nudge kerb inward slightly so it sits on road edge
-          const inward = side === 0 ? 1.2 : -1.2
-          const kPosInner = kPos.clone().add(
-            (side === 0 ? rightCur : rightCur.clone().negate())
-              .clone().multiplyScalar(inward)
-          )
+          const kPos = curKerbEdge.clone().lerp(nxtKerbEdge, t)
           rails.push(
             <mesh
               key={`kerb-${i}-${side}-${k}`}
-              position={[kPosInner.x, 0.03, kPosInner.z]}
+              position={[kPos.x, 0.03, kPos.z]}
               rotation={[0, segAngle, 0]}
             >
-              <boxGeometry args={[1.8, 0.06, 2.2]} />
+              <boxGeometry args={[1.6, 0.06, 2.0]} />
               <meshStandardMaterial
                 color={k % 2 === 0
                   ? (side === 0 ? '#ff0000' : '#ffffff')
@@ -185,10 +184,10 @@ function GuardRails() {
             </mesh>
           )
         }
-        // Sand strip behind kerb
+        // Sand strip
         const sandOffset = side === 0 ? -(half + 4) : (half + 4)
-        const sandPos = segMid.clone().add(
-          rightCur.clone().multiplyScalar(sandOffset)
+        const sandPos = edgeMid.clone().add(
+          rightCur.clone().multiplyScalar(side === 0 ? -4 : 4)
         )
         rails.push(
           <mesh
@@ -196,7 +195,7 @@ function GuardRails() {
             position={[sandPos.x, 0.005, sandPos.z]}
             rotation={[0, segAngle, 0]}
           >
-            <boxGeometry args={[6, 0.01, segLen + 1]} />
+            <boxGeometry args={[6, 0.01, segLen * 0.96]} />
             <meshStandardMaterial color="#e9c46a" roughness={1} />
           </mesh>
         )
@@ -247,32 +246,64 @@ function FinishLine() {
 }
 
 function CheckpointGates() {
+  const points = DESERT_RUN_WAYPOINTS
+
   return (
     <>
-      {DESERT_RUN_CHECKPOINTS.map((cp, i) => (
-        <group key={i} position={[cp.pos.x, 0, cp.pos.z]}>
-          {[-ROAD_WIDTH / 2 - 0.5, ROAD_WIDTH / 2 + 0.5].map((x, j) => (
-            <mesh key={j} position={[x, 2, 0]}>
-              <cylinderGeometry args={[0.2, 0.2, 4, 8]} />
-              <meshStandardMaterial
-                color="#00b4d8"
-                emissive="#00b4d8"
-                emissiveIntensity={0.5}
-              />
+      {DESERT_RUN_CHECKPOINTS.map((cp, i) => {
+        // Find closest waypoint to this checkpoint
+        let closestIdx = 0
+        let minDist = Infinity
+        points.forEach((p, j) => {
+          const d = new THREE.Vector3(p.x, 0, p.z)
+            .distanceTo(new THREE.Vector3(cp.pos.x, 0, cp.pos.z))
+          if (d < minDist) { minDist = d; closestIdx = j }
+        })
+
+        // Get track direction at this point
+        const prev = points[(closestIdx - 1 + points.length) % points.length]
+        const next = points[(closestIdx + 1) % points.length]
+        const trackDir = new THREE.Vector3().subVectors(next, prev).normalize()
+        // Gate faces perpendicular to track direction
+        const gateAngle = Math.atan2(trackDir.x, trackDir.z)
+
+        const color = '#00b4d8'
+        const hw = ROAD_WIDTH / 2 + 0.5
+
+        return (
+          <group
+            key={i}
+            position={[cp.pos.x, 0, cp.pos.z]}
+            rotation={[0, gateAngle, 0]}
+          >
+            {/* Left post */}
+            <mesh position={[-hw, 2.5, 0]}>
+              <cylinderGeometry args={[0.25, 0.25, 5, 8]} />
+              <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.6} />
             </mesh>
-          ))}
-          <mesh position={[0, 4.1, 0]}>
-            <boxGeometry args={[ROAD_WIDTH + 1, 0.25, 0.25]} />
-            <meshStandardMaterial
-              color="#00b4d8"
-              emissive="#00b4d8"
-              emissiveIntensity={0.8}
-              transparent
-              opacity={0.8}
-            />
-          </mesh>
-        </group>
-      ))}
+            {/* Right post */}
+            <mesh position={[hw, 2.5, 0]}>
+              <cylinderGeometry args={[0.25, 0.25, 5, 8]} />
+              <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.6} />
+            </mesh>
+            {/* Top beam */}
+            <mesh position={[0, 5.1, 0]}>
+              <boxGeometry args={[ROAD_WIDTH + 1, 0.3, 0.3]} />
+              <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.9} transparent opacity={0.9} />
+            </mesh>
+            {/* Transparent trigger plane — visual only */}
+            <mesh position={[0, 2, 0]} rotation={[0, 0, 0]}>
+              <planeGeometry args={[ROAD_WIDTH, 4]} />
+              <meshStandardMaterial color={color} transparent opacity={0.08} side={THREE.DoubleSide} />
+            </mesh>
+            {/* CP number */}
+            <mesh position={[0, 5.6, 0]}>
+              <boxGeometry args={[2, 0.8, 0.1]} />
+              <meshStandardMaterial color="#ffd60a" emissive="#ffd60a" emissiveIntensity={0.5} />
+            </mesh>
+          </group>
+        )
+      })}
     </>
   )
 }

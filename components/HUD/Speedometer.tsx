@@ -7,8 +7,12 @@ const GEAR_LABELS = ['1', '2', '3', '4', '5', '6']
 export default function Speedometer() {
   const speed = useGameStore((s) => s.speed)
   const gear = useGameStore((s) => s.currentGear)
-  const rpm = Math.min(((speed % 37) / 37) * 8000 + 800, 8500)
-
+  // Idle at 200 RPM when stopped, rises with speed within each gear
+  const gearSpeedRange = 37  // approx km/h per gear band
+  const rpmInGear = ((speed % gearSpeedRange) / gearSpeedRange)
+  const rpm = speed < 1
+    ? 200   // true idle — engine barely ticking
+    : Math.min(rpmInGear * 8000 + 800, 8500)
   return (
     <div style={{
       position: 'absolute',

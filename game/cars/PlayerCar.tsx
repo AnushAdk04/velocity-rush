@@ -1,9 +1,9 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { useCarPhysics } from './useCarPhysics'
+import { useCarPhysics, CarAlert } from './useCarPhysics'
 import { useGameStore } from '../../store/useGameStore'
 import { DESERT_HAWK } from '../../types/index'
 import ChaseCamera from '../cameras/ChaseCamera'
@@ -42,9 +42,10 @@ function CarMesh() {
 
 interface PlayerCarProps {
   carRef: React.RefObject<THREE.Group>
+  onAlert?: (alert: CarAlert) => void
 }
 
-export default function PlayerCar({ carRef }: PlayerCarProps) {
+export default function PlayerCar({ carRef, onAlert }: PlayerCarProps) {
   const setSpeed = useGameStore((s) => s.setSpeed)
   const setCurrentGear = useGameStore((s) => s.setCurrentGear)
 
@@ -54,6 +55,7 @@ export default function PlayerCar({ carRef }: PlayerCarProps) {
     braking: 28,
     handling: 1.4,
     grip: 0.88,
+    onAlert,
   })
 
   useRaceManager(carRef)
@@ -65,7 +67,7 @@ export default function PlayerCar({ carRef }: PlayerCarProps) {
 
   return (
     <>
-      <group ref={carRef} position={[0, 0.4, 20]}>
+      <group ref={carRef} position={[0, 0.4, 50]}>
         <CarMesh />
       </group>
       <ChaseCamera target={carRef} speed={speed} />

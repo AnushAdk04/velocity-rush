@@ -6,21 +6,24 @@ import * as THREE from 'three'
 import DesertRun from './tracks/DesertRun'
 import PlayerCar from './cars/PlayerCar'
 import AIManager from './ai/AIManager'
+import { CarAlert } from './cars/useCarPhysics'
 
 export const CONTROLS = [
-  { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
-  { name: 'backward', keys: ['ArrowDown', 'KeyS'] },
-  { name: 'left', keys: ['ArrowLeft', 'KeyA'] },
-  { name: 'right', keys: ['ArrowRight', 'KeyD'] },
-  { name: 'brake', keys: ['Space'] },
-  { name: 'camera', keys: ['KeyC'] },
+  { name: 'forward',  keys: ['ArrowUp',    'KeyW'] },
+  { name: 'backward', keys: ['ArrowDown',  'KeyS'] },
+  { name: 'left',     keys: ['ArrowLeft',  'KeyA'] },
+  { name: 'right',    keys: ['ArrowRight', 'KeyD'] },
+  { name: 'brake',    keys: ['Space'] },
+  { name: 'camera',   keys: ['KeyC'] },
+  { name: 'reset',    keys: ['KeyR'] },
 ]
 
 interface GameSceneProps {
   carRef: React.RefObject<THREE.Group>
+  onAlert: (alert: CarAlert) => void
 }
 
-export default function GameScene({ carRef }: GameSceneProps) {
+export default function GameScene({ carRef, onAlert }: GameSceneProps) {
   return (
     <KeyboardControls map={CONTROLS}>
       <Canvas
@@ -38,7 +41,7 @@ export default function GameScene({ carRef }: GameSceneProps) {
         <ambientLight intensity={0.8} />
         <directionalLight position={[50, 80, 50]} intensity={1.2} />
         <DesertRun />
-        <PlayerCar carRef={carRef} />
+        <PlayerCar carRef={carRef} onAlert={onAlert} />
         <AIManager />
       </Canvas>
     </KeyboardControls>
