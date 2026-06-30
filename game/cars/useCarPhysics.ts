@@ -22,7 +22,6 @@ function getGear(speed: number): number {
   return GEARS.length - 1
 }
 
-// Find closest waypoint index to a position
 function getClosestWaypointIndex(pos: THREE.Vector3): number {
   const pts = DESERT_RUN_WAYPOINTS
   let minDist = Infinity
@@ -35,7 +34,6 @@ function getClosestWaypointIndex(pos: THREE.Vector3): number {
   return closest
 }
 
-// Get track forward direction at closest waypoint
 function getTrackDirection(pos: THREE.Vector3): THREE.Vector3 {
   const pts = DESERT_RUN_WAYPOINTS
   const idx = getClosestWaypointIndex(pos)
@@ -45,7 +43,6 @@ function getTrackDirection(pos: THREE.Vector3): THREE.Vector3 {
     .normalize()
 }
 
-// Distance from point to nearest track centerline segment
 function distToTrack(pos: THREE.Vector3): number {
   const pts = DESERT_RUN_WAYPOINTS
   let minDist = Infinity
@@ -65,13 +62,11 @@ function distToTrack(pos: THREE.Vector3): number {
   return minDist
 }
 
-// Push car back inside road if it goes past edge
-function clampToRoad(
+// Returns overshoot info instead of mutating directly, so caller can trigger shake
+function getRoadPushback(
   car: THREE.Group,
-  speed: { current: number },
-  velocity: { current: THREE.Vector3 },
   roadHalf: number
-) {
+): { overshoot: number; toCenter: THREE.Vector3 } | null {
   const pts = DESERT_RUN_WAYPOINTS
   let minDist = Infinity
   let closestPt = new THREE.Vector3()
@@ -97,14 +92,9 @@ function clampToRoad(
       0,
       closestPt.z - car.position.z
     ).normalize()
-    car.position.x += toCenter.x * overshoot
-    car.position.z += toCenter.z * overshoot
-
-    // Kill speed on impact — harder hit = more penalty
-    const impact = Math.min(overshoot / 2, 1)
-    speed.current *= (1 - impact * 0.65)
-    velocity.current.multiplyScalar(1 - impact * 0.65)
+    return { overshoot, toCenter }
   }
+  return null
 }
 
 export type CarAlert = 'none' | 'wrongway' | 'offtrack'
@@ -117,6 +107,8 @@ interface CarPhysicsOptions {
   grip?: number
   gravity?: number
   onAlert?: (alert: CarAlert) => void
+  onShake?: (intensity: number) => void
+  onScreech?: (intensity: number) => void
 }
 
 export function useCarPhysics(
@@ -131,6 +123,8 @@ export function useCarPhysics(
     grip = 0.88,
     gravity = 20,
     onAlert,
+    onShake,
+    onScreech,
   } = options
 
   const velocity = useRef(new THREE.Vector3())
@@ -139,17 +133,15 @@ export function useCarPhysics(
   const currentGear = useRef(0)
   const gearChangeTimer = useRef(0)
 
-  // Alert state
   const currentAlert = useRef<CarAlert>('none')
-  const alertHoldTimer = useRef(0)    // how long current alert has been active
-  const warmupTimer = useRef(5.0)     // ignore alerts for 3s after spawn
-  const ALERT_HOLD = 1.5              // keep alert showing for 1.5s minimum
+  const alertHoldTimer = useRef(0)
+  const warmupTimer = useRef(5.0)
+  const ALERT_HOLD = 1.5
 
-  // Reset / checkpoint tracking
   const lastGoodPos = useRef(new THREE.Vector3(0, 0.4, 50))
   const lastGoodAngle = useRef(Math.PI)
   const resetPressed = useRef(false)
-  const goodPosTimer = useRef(0)      // update good pos every 0.5s
+  const goodPosTimer = useRef(0)
 
   const [, getKeys] = useKeyboardControls()
 
@@ -162,10 +154,10 @@ export function useCarPhysics(
 
     if (phase === 'countdown' || phase === 'menu') {
       speed.current *= (1 - 3 * dt)
+      onScreech?.(0)
       return
     }
 
-    // Warmup — no alerts right after spawn
     if (warmupTimer.current > 0) {
       warmupTimer.current -= dt
     }
@@ -180,7 +172,7 @@ export function useCarPhysics(
       speed.current = 0
       velocity.current.set(0, 0, 0)
       yVelocity.current = 0
-      warmupTimer.current = 2.0  // grace period after reset too
+      warmupTimer.current = 2.0
       setAlert('none')
     }
     if (!rDown) resetPressed.current = false
@@ -240,18 +232,28 @@ export function useCarPhysics(
 
     // --- Road clamp (guard rail collision) ---
     const ROAD_HALF = 13
-    clampToRoad(car, speed, velocity, ROAD_HALF)
+    const pushback = getRoadPushback(car, ROAD_HALF)
+    if (pushback) {
+      car.position.x += pushback.toCenter.x * pushback.overshoot
+      car.position.z += pushback.toCenter.z * pushback.overshoot
+
+      const impact = Math.min(pushback.overshoot / 2, 1)
+      speed.current *= (1 - impact * 0.65)
+      velocity.current.multiplyScalar(1 - impact * 0.65)
+
+      const shakeIntensity = impact * Math.min(Math.abs(speed.current) / 20 + 0.3, 1)
+      if (shakeIntensity > 0.05) onShake?.(shakeIntensity)
+    }
 
     // --- Track awareness ---
     const dist = distToTrack(car.position)
     const trackDir = getTrackDirection(car.position)
 
-    // Update last good position only when on track and moving forward
     goodPosTimer.current -= dt
     if (dist < ROAD_HALF - 1 && goodPosTimer.current <= 0) {
       const carFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion)
       const dot = carFwd.dot(trackDir)
-      if (dot > 0.2) {  // only save if going roughly correct direction
+      if (dot > 0.2) {
         lastGoodPos.current.copy(car.position)
         lastGoodAngle.current = car.rotation.y
         goodPosTimer.current = 0.5
@@ -268,12 +270,26 @@ export function useCarPhysics(
 
       if (dist > ROAD_HALF + 1) {
         newAlert = 'offtrack'
-      } else if (dot < -0.5 && Math.abs(speed.current) > 8) {
+      } else if (dot < -0.5 && isMoving) {
         newAlert = 'wrongway'
       }
 
       setAlert(newAlert)
     }
+
+    // --- Tire screech — hard braking or sliding ---
+    const carFwdNorm = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion)
+    const velLen = velocity.current.length()
+    const velDir = velLen > 0.01
+      ? velocity.current.clone().normalize()
+      : carFwdNorm.clone()
+    const slideAngle = Math.abs(1 - carFwdNorm.dot(velDir))
+    const isBraking = !!keys.brake && Math.abs(speed.current) > 8
+    const screechIntensity = Math.max(
+      isBraking ? Math.min(Math.abs(speed.current) / 30, 1) : 0,
+      slideAngle * Math.min(Math.abs(speed.current) / 15, 1)
+    )
+    onScreech?.(screechIntensity)
 
     function setAlert(a: CarAlert) {
       if (a !== 'none') {
