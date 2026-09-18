@@ -8,6 +8,7 @@ import { useRef, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../store/useGameStore'
 import { CarAlert } from '../game/cars/useCarPhysics'
+import TrackSelect from '@/components/Menus/TrackSelect'
 
 const GameScene = dynamic(() => import('../game/GameScene'), { ssr: false })
 
@@ -85,7 +86,7 @@ function FinishedScreen() {
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
           <button
             onClick={() => useGameStore.setState({
-              phase: 'countdown',
+              phase: 'trackselect',
               currentLap: 1,
               raceTime: 0,
               bestLapTime: null,
@@ -135,7 +136,7 @@ export default function Home() {
 
       {phase === 'menu' && <MainMenu />}
 
-      {phase !== 'menu' && (
+      {(phase === 'countdown' || phase === 'racing') && (
         <>
           <HUD carRef={carRef} />
           <AlertOverlay alert={alert} />
@@ -143,6 +144,7 @@ export default function Home() {
       )}
 
       {phase === 'finished' && <FinishedScreen />}
+      {phase === 'trackselect' && <TrackSelect />}
     </div>
   )
 }

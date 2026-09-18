@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type GamePhase = 'menu' | 'countdown' | 'racing' | 'finished'
+export type GamePhase = 'menu' | 'trackselect' | 'countdown' | 'racing' | 'finished'
 
 interface GameStore {
   phase: GamePhase
@@ -15,7 +15,9 @@ interface GameStore {
   rpm: number
   currentGear: number
   cameraMode: 'third' | 'cockpit'
-
+  currentTrack: 'desert' | 'neon' | 'mountain'
+  
+  setTrack: (track: 'desert' | 'neon' | 'mountain') => void
   setPhase: (phase: GamePhase) => void
   setSpeed: (speed: number) => void
   setRpm: (rpm: number) => void
@@ -39,7 +41,8 @@ export const useGameStore = create<GameStore>((set) => ({
   rpm: 0,
   currentGear: 0,
   cameraMode: 'third',
-
+  currentTrack: 'desert',
+  setTrack: (track) => set({ currentTrack: track }),
   setPhase: (phase) => set({ phase }),
   setSpeed: (speed) => set({ speed }),
   setRpm: (rpm) => set({ rpm }),
