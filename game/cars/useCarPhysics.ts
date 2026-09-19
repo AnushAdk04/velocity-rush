@@ -2,8 +2,34 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useKeyboardControls } from '@react-three/drei'
 import * as THREE from 'three'
-import { DESERT_RUN_WAYPOINTS } from '../tracks/checkpoints'
 import { useGameStore } from '../../store/useGameStore'
+import { DESERT_RUN_WAYPOINTS } from '../tracks/checkpoints'
+import { NEON_CITY_WAYPOINTS } from '../tracks/NeonCityCheckpoints'
+import { MOUNTAIN_WAYPOINTS } from '../tracks/MountainCheckpoints'
+import { START_POSITION, START_ROTATION_Y } from '../tracks/checkpoints'
+import { NEON_START_POSITION, NEON_START_ROTATION_Y } from '../tracks/NeonCityCheckpoints'
+import { MOUNTAIN_START_POSITION, MOUNTAIN_START_ROTATION_Y } from '../tracks/MountainCheckpoints'
+
+function getWaypoints() {
+  const track = useGameStore.getState().currentTrack
+  if (track === 'neon') return NEON_CITY_WAYPOINTS
+  if (track === 'mountain') return MOUNTAIN_WAYPOINTS
+  return DESERT_RUN_WAYPOINTS
+}
+
+function getStartPosition() {
+  const track = useGameStore.getState().currentTrack
+  if (track === 'neon') return NEON_START_POSITION
+  if (track === 'mountain') return MOUNTAIN_START_POSITION
+  return START_POSITION
+}
+
+function getStartRotationY() {
+  const track = useGameStore.getState().currentTrack
+  if (track === 'neon') return NEON_START_ROTATION_Y
+  if (track === 'mountain') return MOUNTAIN_START_ROTATION_Y
+  return START_ROTATION_Y
+}
 
 const GEARS = [
   { min: 0, max: 8, accelMult: 1.0 },
@@ -23,7 +49,7 @@ function getGear(speed: number): number {
 }
 
 function getClosestWaypointIndex(pos: THREE.Vector3): number {
-  const pts = DESERT_RUN_WAYPOINTS
+  const pts = getWaypoints()
   let minDist = Infinity
   let closest = 0
   for (let i = 0; i < pts.length; i++) {
@@ -35,7 +61,7 @@ function getClosestWaypointIndex(pos: THREE.Vector3): number {
 }
 
 function getTrackDirection(pos: THREE.Vector3): THREE.Vector3 {
-  const pts = DESERT_RUN_WAYPOINTS
+  const pts = getWaypoints()
   const idx = getClosestWaypointIndex(pos)
   const next = (idx + 1) % pts.length
   return new THREE.Vector3()
@@ -43,8 +69,34 @@ function getTrackDirection(pos: THREE.Vector3): THREE.Vector3 {
     .normalize()
 }
 
+function getTrackHeight(pos: THREE.Vector3): number {
+  if (useGameStore.getState().currentTrack !== 'mountain') return 0
+
+  const pts = getWaypoints()
+  let minDist = Infinity
+  let height = pts[0].y
+
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = new THREE.Vector3(pts[i].x, 0, pts[i].z)
+    const b = new THREE.Vector3(pts[i + 1].x, 0, pts[i + 1].z)
+    const ab = new THREE.Vector3().subVectors(b, a)
+    const len2 = ab.dot(ab)
+    if (len2 === 0) continue
+    const ap = new THREE.Vector3(pos.x, 0, pos.z).sub(a)
+    const t = Math.max(0, Math.min(1, ap.dot(ab) / len2))
+    const closest = a.clone().addScaledVector(ab, t)
+    const distance = new THREE.Vector3(pos.x, 0, pos.z).distanceTo(closest)
+    if (distance < minDist) {
+      minDist = distance
+      height = THREE.MathUtils.lerp(pts[i].y, pts[i + 1].y, t)
+    }
+  }
+
+  return height
+}
+
 function distToTrack(pos: THREE.Vector3): number {
-  const pts = DESERT_RUN_WAYPOINTS
+  const pts = getWaypoints()
   let minDist = Infinity
   for (let i = 0; i < pts.length - 1; i++) {
     const a = new THREE.Vector3(pts[i].x, 0, pts[i].z)
@@ -67,7 +119,7 @@ function getRoadPushback(
   car: THREE.Group,
   roadHalf: number
 ): { overshoot: number; toCenter: THREE.Vector3 } | null {
-  const pts = DESERT_RUN_WAYPOINTS
+  const pts = getWaypoints()
   let minDist = Infinity
   let closestPt = new THREE.Vector3()
 
@@ -138,8 +190,9 @@ export function useCarPhysics(
   const warmupTimer = useRef(5.0)
   const ALERT_HOLD = 1.5
 
-  const lastGoodPos = useRef(new THREE.Vector3(0, 0.4, 50))
-  const lastGoodAngle = useRef(Math.PI)
+  const lastGoodPos = useRef(getStartPosition().clone())
+  const lastGoodAngle = useRef(getStartRotationY())
+  const trackedTrack = useRef(useGameStore.getState().currentTrack)
   const resetPressed = useRef(false)
   const goodPosTimer = useRef(0)
 
@@ -151,6 +204,14 @@ export function useCarPhysics(
     const dt = Math.min(delta, 0.05)
     const keys = getKeys() as Record<string, boolean>
     const { phase } = useGameStore.getState()
+
+    const currentTrack = useGameStore.getState().currentTrack
+    if (currentTrack !== trackedTrack.current) {
+      trackedTrack.current = currentTrack
+      lastGoodPos.current.copy(getStartPosition())
+      lastGoodAngle.current = getStartRotationY()
+      warmupTimer.current = 5.0
+    }
 
     if (phase === 'countdown' || phase === 'menu') {
       speed.current *= (1 - 3 * dt)
@@ -167,7 +228,7 @@ export function useCarPhysics(
     if (rDown && !resetPressed.current) {
       resetPressed.current = true
       car.position.copy(lastGoodPos.current)
-      car.position.y = 0.4
+      car.position.y = getTrackHeight(car.position) + 0.4
       car.rotation.set(0, lastGoodAngle.current, 0)
       speed.current = 0
       velocity.current.set(0, 0, 0)
@@ -229,6 +290,12 @@ export function useCarPhysics(
     car.position.x += velocity.current.x * dt
     car.position.z += velocity.current.z * dt
     car.position.y += yVelocity.current * dt
+
+    const groundY = getTrackHeight(car.position) + 0.4
+    if (car.position.y < groundY) {
+      car.position.y = groundY
+      yVelocity.current = 0
+    }
 
     // --- Road clamp (guard rail collision) ---
     const ROAD_HALF = 13

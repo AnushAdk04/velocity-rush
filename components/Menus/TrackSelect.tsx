@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../store/useGameStore'
 import { TRACKS, TrackConfig } from '../../game/tracks/trackRegistry'
 
@@ -121,44 +121,85 @@ function TrackCard({
 
 // Procedural track shape preview drawn as SVG lines
 function TrackPreview({ track, selected }: { track: TrackConfig; selected: boolean }) {
-  const shapes: Record<string, string> = {
-    desert: 'M 20 80 L 20 30 Q 20 15 35 12 L 90 12 Q 105 12 108 25 L 108 55 Q 108 65 95 68 L 60 68 Q 50 68 48 78 L 48 88 Q 48 98 35 98 L 30 98 Q 20 98 20 88 Z',
-    neon:   'M 15 85 L 15 50 Q 15 35 28 30 L 45 25 L 45 40 L 75 40 L 75 20 Q 75 10 88 10 L 105 10 L 105 50 Q 105 65 90 68 L 65 68 L 65 85 Q 65 98 50 98 L 30 98 Q 15 98 15 85 Z',
-    mountain:'M 20 90 L 25 55 Q 28 40 42 35 L 65 28 Q 78 24 82 35 L 88 55 Q 92 68 80 72 L 60 75 L 58 90 Q 56 100 42 100 L 32 100 Q 20 100 20 90 Z',
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // Import waypoints per track
+  const getWaypoints = () => {
+    if (track.id === 'neon') {
+      const { NEON_CITY_WAYPOINTS } = require('../../game/tracks/NeonCityCheckpoints')
+      return NEON_CITY_WAYPOINTS as { x: number; z: number }[]
+    }
+    if (track.id === 'mountain') {
+      const { MOUNTAIN_WAYPOINTS } = require('../../game/tracks/MountainCheckpoints')
+      return MOUNTAIN_WAYPOINTS as { x: number; z: number }[]
+    }
+    const { DESERT_RUN_WAYPOINTS } = require('../../game/tracks/checkpoints')
+    return DESERT_RUN_WAYPOINTS as { x: number; z: number }[]
   }
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const W = 110, H = 90
+    const pts = getWaypoints()
+    const xs = pts.map(p => p.x)
+    const zs = pts.map(p => p.z)
+    const minX = Math.min(...xs), maxX = Math.max(...xs)
+    const minZ = Math.min(...zs), maxZ = Math.max(...zs)
+    const rangeX = maxX - minX || 1
+    const rangeZ = maxZ - minZ || 1
+    const pad = 10
+
+    const toCanvas = (x: number, z: number): [number, number] => [
+      ((x - minX) / rangeX) * (W - pad * 2) + pad,
+      ((z - minZ) / rangeZ) * (H - pad * 2) + pad,
+    ]
+
+    ctx.clearRect(0, 0, W, H)
+
+    // Outline
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+    ctx.lineWidth = 8
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    pts.forEach((p, i) => {
+      const [cx, cz] = toCanvas(p.x, p.z)
+      i === 0 ? ctx.moveTo(cx, cz) : ctx.lineTo(cx, cz)
+    })
+    ctx.closePath()
+    ctx.stroke()
+
+    // Surface
+    ctx.strokeStyle = selected ? track.accentColor : 'rgba(255,255,255,0.5)'
+    ctx.lineWidth = 3.5
+    ctx.beginPath()
+    pts.forEach((p, i) => {
+      const [cx, cz] = toCanvas(p.x, p.z)
+      i === 0 ? ctx.moveTo(cx, cz) : ctx.lineTo(cx, cz)
+    })
+    ctx.closePath()
+    ctx.stroke()
+
+    // Start dot
+    const [sx, sz] = toCanvas(pts[0].x, pts[0].z)
+    ctx.fillStyle = selected ? track.accentColor : 'rgba(255,255,255,0.6)'
+    ctx.beginPath()
+    ctx.arc(sx, sz, 3.5, 0, Math.PI * 2)
+    ctx.fill()
+  }, [selected, track.id])
 
   return (
     <div style={{
       width: '100%', height: '90px',
-      background: 'rgba(0,0,0,0.3)',
+      background: 'rgba(0,0,0,0.35)',
       borderRadius: '10px',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      overflow: 'hidden',
     }}>
-      <svg viewBox="0 0 124 110" width="110" height="90">
-        {/* Track outline */}
-        <path
-          d={shapes[track.id]}
-          fill="none"
-          stroke="rgba(255,255,255,0.12)"
-          strokeWidth="12"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* Track surface */}
-        <path
-          d={shapes[track.id]}
-          fill="none"
-          stroke={selected ? track.accentColor : 'rgba(255,255,255,0.35)'}
-          strokeWidth="5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray={selected ? 'none' : '4 3'}
-        />
-        {/* Start line dot */}
-        <circle cx="20" cy="85" r="3"
-          fill={selected ? track.accentColor : 'rgba(255,255,255,0.4)'} />
-      </svg>
+      <canvas ref={canvasRef} width={110} height={90} />
     </div>
   )
 }

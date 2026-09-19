@@ -5,7 +5,26 @@ import {
   DESERT_RUN_CHECKPOINTS,
   FINISH_LINE,
 } from '../tracks/checkpoints'
+import {
+  NEON_CITY_CHECKPOINTS,
+  NEON_FINISH_LINE,
+} from '../tracks/NeonCityCheckpoints'
+import {
+  MOUNTAIN_CHECKPOINTS,
+  MOUNTAIN_FINISH_LINE,
+} from '../tracks/MountainCheckpoints'
 import { useGameStore } from '../../store/useGameStore'
+
+function getRaceTrack() {
+  const track = useGameStore.getState().currentTrack
+  if (track === 'neon') {
+    return { checkpoints: NEON_CITY_CHECKPOINTS, finishLine: NEON_FINISH_LINE }
+  }
+  if (track === 'mountain') {
+    return { checkpoints: MOUNTAIN_CHECKPOINTS, finishLine: MOUNTAIN_FINISH_LINE }
+  }
+  return { checkpoints: DESERT_RUN_CHECKPOINTS, finishLine: FINISH_LINE }
+}
 
 export function useRaceManager(
   carRef: React.RefObject<THREE.Group>
@@ -13,18 +32,36 @@ export function useRaceManager(
   const nextCheckpoint = useRef(0)
   const lapStartTime = useRef(0)
   const allCheckpointsHit = useRef(false)
-  const crossedFinish = useRef(false)  // debounce finish line
+  const crossedFinish = useRef(false)
+  const previousPhase = useRef(useGameStore.getState().phase)
+  const previousTrack = useRef(useGameStore.getState().currentTrack)
 
   useFrame(() => {
     const car = carRef.current
     if (!car) return
 
-    const { currentLap, totalLaps, raceTime, phase } = useGameStore.getState()
+    const { currentLap, totalLaps, raceTime, phase, currentTrack } = useGameStore.getState()
+
+    if (previousTrack.current !== currentTrack) {
+      previousTrack.current = currentTrack
+      nextCheckpoint.current = 0
+      lapStartTime.current = 0
+      allCheckpointsHit.current = false
+      crossedFinish.current = false
+    }
+
+    if (phase === 'countdown' && previousPhase.current !== 'countdown') {
+      nextCheckpoint.current = 0
+      lapStartTime.current = 0
+      allCheckpointsHit.current = false
+      crossedFinish.current = false
+    }
+    previousPhase.current = phase
 
     if (phase !== 'racing') return
 
     const pos = car.position
-    const checkpoints = DESERT_RUN_CHECKPOINTS
+    const { checkpoints, finishLine } = getRaceTrack()
 
     // Check next checkpoint
     if (nextCheckpoint.current < checkpoints.length) {
@@ -44,13 +81,13 @@ export function useRaceManager(
     if (allCheckpointsHit.current) {
       const dist = new THREE.Vector3(pos.x, 0, pos.z)
         .distanceTo(new THREE.Vector3(
-          FINISH_LINE.pos.x, 0, FINISH_LINE.pos.z
+          finishLine.pos.x, 0, finishLine.pos.z
         ))
 
-      if (dist < FINISH_LINE.radius && !crossedFinish.current) {
+      if (dist < finishLine.radius && !crossedFinish.current) {
         crossedFinish.current = true
 
-        const lapTime = raceTime - lapStartTime.current
+        const lapTime = Math.max(0, raceTime - lapStartTime.current)
         lapStartTime.current = raceTime
 
         // Update best lap time directly via setState
@@ -72,7 +109,7 @@ export function useRaceManager(
       }
 
       // Reset finish line debounce once car moves away
-      if (dist > FINISH_LINE.radius * 1.5) {
+      if (dist > finishLine.radius * 1.5) {
         crossedFinish.current = false
       }
     }

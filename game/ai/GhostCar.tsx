@@ -4,7 +4,17 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { DESERT_RUN_WAYPOINTS } from '../tracks/checkpoints'
+import { NEON_CITY_WAYPOINTS } from '../tracks/NeonCityCheckpoints'
+import { MOUNTAIN_WAYPOINTS } from '../tracks/MountainCheckpoints'
 import { registerAIPosition } from '../race/usePositionTracker'
+import { useGameStore } from '../../store/useGameStore'
+
+function getWaypoints() {
+  const track = useGameStore.getState().currentTrack
+  if (track === 'neon') return NEON_CITY_WAYPOINTS
+  if (track === 'mountain') return MOUNTAIN_WAYPOINTS
+  return DESERT_RUN_WAYPOINTS
+}
 
 interface GhostCarProps {
   index: number
@@ -54,7 +64,7 @@ export default function GhostCar({
   const closestStart = (() => {
     let minDist = Infinity
     let closest = 0
-    DESERT_RUN_WAYPOINTS.forEach((wp, i) => {
+    getWaypoints().forEach((wp, i) => {
       const d = startPos.distanceTo(wp)
       if (d < minDist) { minDist = d; closest = i }
     })
@@ -75,7 +85,7 @@ export default function GhostCar({
     if (phase !== 'racing') return
     if (!started.current) started.current = true
 
-    const waypoints = DESERT_RUN_WAYPOINTS
+    const waypoints = getWaypoints()
     const target = waypoints[waypointIndex.current]
     const dir = new THREE.Vector3().subVectors(target, currentPos.current)
     const distance = dir.length()
@@ -100,6 +110,3 @@ export default function GhostCar({
     </group>
   )
 }
-
-// Need to import useGameStore inside component
-import { useGameStore } from '../../store/useGameStore'

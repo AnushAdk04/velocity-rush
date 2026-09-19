@@ -2,11 +2,18 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { DESERT_RUN_WAYPOINTS } from '../tracks/checkpoints'
+import { NEON_CITY_WAYPOINTS } from '../tracks/NeonCityCheckpoints'
+import { MOUNTAIN_WAYPOINTS } from '../tracks/MountainCheckpoints'
 import { useGameStore } from '../../store/useGameStore'
-
+function getWaypoints() {
+  const track = useGameStore.getState().currentTrack
+  if (track === 'neon') return NEON_CITY_WAYPOINTS
+  if (track === 'mountain') return MOUNTAIN_WAYPOINTS
+  return DESERT_RUN_WAYPOINTS
+}
 // Returns 0-1 progress along the track for any position
 function getTrackProgress(pos: THREE.Vector3, lap: number, totalLaps: number): number {
-  const pts = DESERT_RUN_WAYPOINTS
+  const pts = getWaypoints()
   const n = pts.length
 
   // Find closest waypoint

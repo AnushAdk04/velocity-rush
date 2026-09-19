@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useCarPhysics, CarAlert } from './useCarPhysics'
@@ -11,6 +11,9 @@ import { useRaceManager } from '../race/useRaceManager'
 import { usePositionTracker } from '../race/usePositionTracker'
 import { useEngineSound } from '../audio/useEngineSound'
 import { useSFX } from '../audio/useSFX'
+import { START_POSITION, DESERT_RUN_WAYPOINTS } from '../tracks/checkpoints'
+import { NEON_START_POSITION, NEON_CITY_WAYPOINTS } from '../tracks/NeonCityCheckpoints'
+import { MOUNTAIN_START_POSITION, MOUNTAIN_WAYPOINTS } from '../tracks/MountainCheckpoints'
 
 function CarMesh({ speed }: { speed: React.RefObject<number> }) {
   const wheelRefs = [
@@ -98,6 +101,32 @@ export default function PlayerCar({ carRef, onAlert }: PlayerCarProps) {
     sfx.updateScreech(intensity)
   }, [])
 
+  const currentTrack = useGameStore((s) => s.currentTrack)
+  const { startPos, startRotY } = useMemo(() => {
+    const getStartRotation = (waypoints: { x: number; z: number }[]) => {
+      const p1 = waypoints[0]
+      const p2 = waypoints[1]
+      return Math.atan2(p2.x - p1.x, p2.z - p1.z) + Math.PI
+    }
+
+    if (currentTrack === 'neon') {
+      return {
+        startPos: NEON_START_POSITION,
+        startRotY: getStartRotation(NEON_CITY_WAYPOINTS),
+      }
+    }
+    if (currentTrack === 'mountain') {
+      return {
+        startPos: MOUNTAIN_START_POSITION,
+        startRotY: getStartRotation(MOUNTAIN_WAYPOINTS),
+      }
+    }
+    return {
+      startPos: START_POSITION,
+      startRotY: getStartRotation(DESERT_RUN_WAYPOINTS),
+    }
+  }, [currentTrack])
+
   const { speed, currentGear } = useCarPhysics(carRef, {
     topSpeed: DESERT_HAWK.topSpeed / 3.6,
     acceleration: 12,
@@ -133,7 +162,11 @@ export default function PlayerCar({ carRef, onAlert }: PlayerCarProps) {
 
   return (
     <>
-      <group ref={carRef} position={[0, 0.4, 50]}>
+      <group
+        ref={carRef}
+        position={[startPos.x, startPos.y, startPos.z]}
+        rotation={[0, startRotY, 0]}
+      >
         <CarMesh speed={speed} />
       </group>
       <ChaseCamera target={carRef} speed={speed} shakeRef={shakeRef} />

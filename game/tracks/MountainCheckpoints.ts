@@ -1,0 +1,14 @@
+import {
+  DESERT_RUN_WAYPOINTS,
+  DESERT_RUN_CHECKPOINTS,
+  FINISH_LINE,
+  START_POSITION,
+  START_ROTATION_Y,
+} from './checkpoints'
+
+// The mountain environment uses the same race layout as Desert Run.
+export const MOUNTAIN_WAYPOINTS = DESERT_RUN_WAYPOINTS
+export const MOUNTAIN_CHECKPOINTS = DESERT_RUN_CHECKPOINTS
+export const MOUNTAIN_FINISH_LINE = FINISH_LINE
+export const MOUNTAIN_START_POSITION = START_POSITION
+export const MOUNTAIN_START_ROTATION_Y = START_ROTATION_Y
